@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="https://ethereum.org/favicon-32x32.png?v=8b512faa8d4a0b019c123a771b6622aa" type="image/png">
+    <title>Ethereum Validator Block Probability Calculator</title>
+    <meta name="description" content="Calculate the average duration before your next Ethereum ETH staking block proposal. Enter the number of validators you own to see the probability of block assignment.">
+    <meta name="keywords" content="Ethereum, Validator, Block Probability, Ethereum Calculator, Blockchain, Crypto, ETH Validator, Block Proposal, ETH Staking, Ether">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f4f4f4;
+        }
+        .container {
+            text-align: center;
+            width: 90%;
+            max-width: 600px;
+        }
+        input {
+            margin-top: 10px;
+            padding: 10px;
+            width: calc(100% - 22px);
+        }
+        button {
+            margin-top: 10px;
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #999;
+            cursor: default;
+        }
+        #result {
+            margin-top: 20px;
+        }
+        .loading {
+            margin-top: 10px;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Ethereum Validator Block Probability Calculator</h1>
+        <h2>How long until your next block proposal?</h2>
+        <div>
+            <label for="validatorCount">Number of Validators You Own:</label>
+            <input type="number" id="validatorCount" placeholder="Enter number">
+        </div>
+        <button id="calculate">Calculate</button>
+        <div class="loading" id="loadingIndicator" style="display: none;">Loading...</div>
+        <div id="result"></div>
+        <canvas id="probabilityChart"></canvas>
+        <p>data from <a href="https://www.quicknode.com/" target="_blank" rel="noopener noreferrer">QuickNode</a></p>
+    </div>
+    <script>
+        const blockTimeInSeconds = 12;
+        const blocksPerDay = 60 * 60 * 24 / blockTimeInSeconds;
+        let probabilityChart = null;
+        const calculateButton = document.getElementById('calculate');
+        const loadingIndicator = document.getElementById('loadingIndicator');
+
+        calculateButton.addEventListener('click', function() {
+            const validatorCount = parseInt(document.getElementById('validatorCount').value);
+            if (!validatorCount || validatorCount <= 0) return;
+
+            toggleLoading(true);
+            fetchTotalValidators().then(totalValidators => {
+                const averageDays = calculateAverageDays(validatorCount, totalValidators);
+                document.getElementById('result').innerHTML = `Average duration before your next block: ${averageDays.toFixed(2)} days`;
+                updateChart(validatorCount, totalValidators);
+                toggleLoading(false);
+            });
+        });
+
+        function fetchTotalValidators() {
+            const cacheKey = 'totalValidators';
+            const cachedData = localStorage.getItem(cacheKey);
+            if (cachedData) {
+                const data = JSON.parse(cachedData);
+                const isExpired = (new Date().getTime() - data.timestamp) > 48 * 60 * 60 * 1000;
+                if (!isExpired && data.totalValidators) {
+                    return Promise.resolve(data.totalValidators);
+                }
+            }
+
+            const nodeUrl = 'https://docs-demo.quiknode.pro'; // thanks, quiknode!
+            const stateId = 'head';
+            const url = `${nodeUrl}/eth/v1/beacon/states/${stateId}/validators`;
+
+            return fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    const activeValidators = data.data.filter(validator => validator.status === 'active_ongoing').length;
+                    localStorage.setItem(cacheKey, JSON.stringify({ totalValidators: activeValidators, timestamp: new Date().getTime() }));
+                    return activeValidators;
+                });
+        }
+
+        function calculateAverageDays(validatorCount, totalValidators) {
+            return totalValidators / (validatorCount * blocksPerDay);
+        }
+
+        function updateChart(validatorCount, totalValidators) {
+            const days = Array.from({length: 30}, (_, i) => i + 1);
+            const data = days.map(day => {
+                const lambda = day * blocksPerDay * validatorCount / totalValidators;
+                return Math.exp(-lambda);
+            });
+
+            const ctx = document.getElementById('probabilityChart').getContext('2d');
+            if (probabilityChart) probabilityChart.destroy();
+            probabilityChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: days,
+                    datasets: [{
+                        label: 'Cumulative Probability of Zero Blocks After N Days',
+                        data: data,
+                        fill: false,
+                        borderColor: 'rgb(75, 192, 192)',
+                        tension: 0.1
+                    }]
+                },
+                options: {}
+            });
+        }
+
+        function toggleLoading(isLoading) {
+            calculateButton.disabled = isLoading;
+            loadingIndicator.style.display = isLoading ? 'block' : 'none';
+        }
+    </script>
+</body>
+</html>
