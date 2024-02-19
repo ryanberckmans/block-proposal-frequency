@@ -81,7 +81,7 @@
             toggleLoading(true);
             fetchTotalValidators().then(totalValidators => {
                 const averageDays = calculateAverageDays(validatorCount, totalValidators);
-                document.getElementById('result').innerHTML = `Average duration before your next block: ${averageDays.toFixed(2)} days`;
+                document.getElementById('result').innerHTML = `<p>Total validators: ${new Intl.NumberFormat('en-US').format(totalValidators)}</p><p>Average duration before your next block: ${averageDays.toFixed(2)} days</p>`;
                 updateChart(validatorCount, totalValidators);
                 toggleLoading(false);
             });
